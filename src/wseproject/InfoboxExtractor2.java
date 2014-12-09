@@ -19,8 +19,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.Vector;
 
-import org.apache.commons.io.FileUtils;
-
 import edu.jhu.nlp.wikipedia.*;
 
 public class InfoboxExtractor2 {
