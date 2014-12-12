@@ -16,45 +16,37 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.Stack;
 import java.util.TreeSet;
 import java.util.Vector;
 
 import edu.jhu.nlp.wikipedia.*;
 
 public class InfoboxExtractor2 {
-    BufferedReader br;
-    BufferedWriter bw;
+    BufferedReader _br;
+    BufferedWriter _bw;
     
-    class Info{
-        int id = -1;
-        int index = -1;
-        public Info(int id){
-            this.id = id;
+    Set<String> boxType = new HashSet<String>();
+    Map<String, String> _translator = new HashMap<String, String>();
+    Map<String, String> _dependentRelation = new HashMap<String, String>();
+    String dataPath = "data/";
+    
+    boolean keep = false;
+    String propStore;
+    StringBuilder buffer = new StringBuilder();
+    
+    public void setTranslator(String filePath) throws IOException{
+        File file = new File(filePath);
+        BufferedReader reader = new BufferedReader(new FileReader(file));
+        String line;
+        while((line = reader.readLine()) != null){
+            String[] token = line.split(",");
+            this._translator.put(token[0], token[1]);
         }
     }
-    
-    
-    //Map<String, Integer> property = new HashMap<String, Integer>();
-    Map<String, Info> entity = new HashMap<String, Info>();
-    Set<String> boxType = new HashSet<String>();
-    String corpusPath = "/Volumes/Tin's Drive/Wikipedia/enwiki-20141106-pages-articles.xml";
-    //String dataPath = "/Volumes/Tin's Drive/project_data/";
-    String dataPath = "data/";
-    int postingIndex = 0;
-    int propertyIndex = 0;
-    
     public void output() throws IOException{
-        File file;
-        BufferedWriter bw;
-        
-        file = new File(this.dataPath + "entity_map");
-        bw = new BufferedWriter(new FileWriter(file));
-        for(String s : entity.keySet()){
-            bw.write(s + ":" + entity.get(s) + "\n");
-        }
-        bw.close();
-        file = new File(this.dataPath + "box_type");
-        bw = new BufferedWriter(new FileWriter(file));
+        File file = new File(this.dataPath + "/tin/box_types");
+        BufferedWriter bw = new BufferedWriter(new FileWriter(file));
         for(String s : boxType){
             bw.write(s + "\n");
         }
@@ -62,169 +54,472 @@ public class InfoboxExtractor2 {
     }
     public void start(String outputPath, String articleListPath) throws IOException{
         File outputFile = new File(outputPath);
-        this.bw = new BufferedWriter(new FileWriter(outputFile));
+        outputFile.delete();
+        this._bw = new BufferedWriter(new FileWriter(outputFile,true));
         File articleListFile = new File(articleListPath);
-        this.br = new BufferedReader(new FileReader(articleListFile));
+        this._br = new BufferedReader(new FileReader(articleListFile));
         String article;
-        while((article = br.readLine()) != null){
-            
+        int count = 0;
+        while((article = _br.readLine()) != null){
             String infobox = WikiInfoboxReader.getByArticleName(article);
             if(infobox.length()==0)
                 continue;
             System.out.println(article);
             System.out.println(infobox);
             processInfobox(article, infobox);
+            count++;
         }
-        this.bw.close();
-        this.br.close();
-        System.out.println("DONE!");
+        this._bw.close();
+        this._br.close();
+        this.output();
+        System.out.println("DONE "+count);
     }    
-    
     public void processInfobox(String source, String box) throws IOException{
         Scanner sc = new Scanner(box);
-        String type = null;
+        this.keep = false;
+        /* get inbox type */
+        String line = sc.nextLine();
+        //System.out.println(line);
+        int index = line.indexOf("box")+3;
+        String type = line.substring(index).trim().toLowerCase();
+        boxType.add(type);
+        System.out.println("type: "+type);
+        /* process rest lines */
         while(sc.hasNextLine()){
-            String line = sc.nextLine();
+            line = sc.nextLine();
             //System.out.println(line);
-            if(line.matches("(.*)Infobox(.*)")){
-                //System.out.println("line: "+line);
-                type = line.substring(line.lastIndexOf("{")+9).trim().toLowerCase();
-                System.out.println("type: "+type);
-                boxType.add(type);
-            }else{
-                processLine(source, type, line);
-            }
+            processLine(source, type, line);
         }
         return;
     }
     public void write(String entity, String type, String property, 
-            String content, String source) throws IOException{
+            String content, String source){
+        if(content.equals(""))
+            return;
         StringBuilder sb = new StringBuilder();
         sb.append(entity).append(Indexer.DELIM);
         sb.append(type).append(Indexer.DELIM);
         sb.append(property).append(Indexer.DELIM);
         sb.append(content).append(Indexer.DELIM);
         sb.append(source).append("\n");
-        this.bw.write(sb.toString());
-        System.out.print(": " + sb.toString());
-    }
-
-    public void processLine(String source, String type, String line) throws IOException{
-        String[] token = line.split("=");
-        //no value for this property
-        if(token.length<=1 || token[1].equals(" "))
-            return;
-        String prop = token[0].substring(token[0].indexOf("|")+1).trim().toLowerCase();
-        //System.out.println(prop);
-        //unimportant property
-        if(prop.matches("(.*)image(.*)") || prop.matches("(.*)logo(.*)") 
-                || prop.matches("(.*)display(.*)") || prop.matches("(.*)caption(.*)")
-                || prop.matches("(.*)name(.*)") || prop.matches("(.*)alt(.*)")
-                || prop.matches("(.*)alt(.*)") || prop.matches("(.*)coordinates(.*)")
-                || prop.matches("(.*)seat(.*)")|| prop.matches("(.*)footnotes(.*)"))
-            return;
-        
-        String[] props = token[1].split(" *<br(.){0,2}> *|( ){2,}");
-        Scanner sc;
-        String temp;
-        StringBuilder phrase = new StringBuilder(); //dede and {{dede ded}}
-        StringBuilder curly = new StringBuilder(); //{{efede ded e}}
-        StringBuilder square = new StringBuilder(); //[[efede ded e]]
-        boolean lookingCurly = false;
-        boolean lookingSquare = false;
-        for(String p : props){
-            //System.out.println(p);
-            sc = new Scanner(p);
-            while(sc.hasNext()){
-                String piece = sc.next();
-                //System.out.println(piece);
-                if(piece.matches("(.*)}}(,)?")){
-                    curly.append(piece);
-                    temp = this.processCurlyBraces(
-                            curly.substring(curly.indexOf("{")+2,curly.indexOf("}")));
-                    if(temp!=null)
-                        phrase.append(temp).append(" ");
-                    curly.setLength(0);
-                    curly.trimToSize();
-                    lookingCurly = false;
-                }else if(piece.startsWith("{{")){
-                    curly.append(piece).append(" ");
-                    lookingCurly = true;
-                }else if(lookingCurly){
-                    curly.append(piece).append(" ");
-                }else if(piece.matches("(.*)]](,)?")){
-                    square.append(piece);
-                    this.processSquareBrackets(
-                            square.substring(square.indexOf("[")+2,square.indexOf("]"))
-                            ,prop, type, source); //reverseRelation
-                    phrase.append(square).append(" ");
-                    square.setLength(0);
-                    square.trimToSize();
-                    lookingSquare = false;
-                }else if(piece.contains("[[")){
-                    square.append(piece).append(" ");
-                    lookingSquare = true;
-                }else if(lookingSquare){
-                    square.append(piece).append(" ");
-                }else{
-                    phrase.append(piece).append(" ");
-                }
-            }
-            this.write(source, type, prop, phrase.toString().trim(), source);
+        try {
+            this._bw.write(sb.toString());
+            System.out.print(": " + sb.toString());
+        } catch (NullPointerException e){
+            //this._bw is not initialized
+            System.out.print(": " + sb.toString());
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
-    public void processSquareBrackets(String entityName, String prop, 
-            String type, String article) throws IOException{
-        if(entityName.contains("|"))
-            entityName = entityName.substring(0,entityName.indexOf("|"));
-        
-        this.write(entityName, prop, type, article, article);
+    private boolean validProperty(String prop){
+        //useless property
+        //System.out.println(prop);
+        if(prop.equals("name")
+                || prop.matches(".*(module|translit).*") //parameter
+                || prop.matches(".*(symbol|photo|flag|seal|shield|image|logo|display|caption|alt|emblem|seat|footnote|signature).*") //image or sound
+                || prop.matches(".*(label|map|coordinates|pushpin|coor).*")
+                || prop.matches(".*(ref).*")
+                || prop.matches(".*(blank).*")
+            )
+            return false;
+        return true;
     }
-    public String processCurlyBraces(String word){
+    public String processContent(String ori){
+        String result = ori.replaceAll("<ref.*</ref>","").
+                replaceAll("<ref.*/>","").replaceAll("<[^b>][^r>][^>]*>", "").
+                replaceAll("</.*>", "").replaceAll("<!--.*-->", "");
+        result = result.replaceAll("&nbsp;-", "").replaceAll("&nbsp;", " ").
+                replaceAll("&ndash;","-").replaceAll("&nbsp;"," ").
+                replaceAll("&#.*;"," ");
+        return result;
+    }
+    public boolean isValidContent(String content){
+        //System.out.println("content: "+content);
+        Stack<Integer> op = new Stack<Integer>();
+        int left, right;
+        if(content.contains("{{") || content.contains("}}")){
+            left = content.lastIndexOf("{{");
+            right = content.lastIndexOf("}}");
+            while(left!=-1 || right!=-1){
+                //System.out.println("left: "+left);
+                //System.out.println("right: "+right);
+                if(right>left){
+                    op.push(right);
+                    right = content.lastIndexOf("}}", right-2);
+                }else{
+                    if(op.isEmpty())
+                        return false;
+                    op.pop();
+                    left = content.lastIndexOf("{{", left-2);
+                }
+            }
+            if(op.size()!=0)
+                return false;
+        }
+        op.clear();
+        if(content.contains("[[") || content.contains("]]")){
+            left = content.lastIndexOf("[[");
+            right = content.lastIndexOf("]]");
+            while(left!=-1 || right!=-1){
+                if(right>left){
+                    op.push(right);
+                    right = content.lastIndexOf("]]", right-2);
+                }else{
+                    if(op.isEmpty())
+                        return false;
+                    op.pop();
+                    left = content.lastIndexOf("[[", left-2);
+                }
+            }
+            if(op.size()!=0)
+                return false;
+        }
+        //System.out.println("Valid!");
+        return true;
+    }
+    public void processLine(String source, String type, String line) throws IOException{
+        System.out.println("line: "+line);
+        String prop = null;
+        String content = null;
+        //System.out.println(keep);
+        if(this.keep){
+            this.buffer.append(line);
+            if(!isValidContent(this.buffer.toString())) return;
+            content = this.buffer.toString();
+            prop = this.propStore;
+            this.keep = false;
+        }else{
+            if(!line.contains("="))
+                return;
+            //System.out.println("test1");
+            prop = line.substring(0, line.indexOf("=")).trim();
+            content = line.substring(line.indexOf("=")+1).trim();
+            //no value for this property
+            if(content.equals(""))
+                return;
+            //System.out.println("test2");
+            prop = prop.replaceAll("\\|", "").trim().toLowerCase();
+            System.out.println("prop: "+prop);
+            if(!validProperty(prop)) return;
+            
+            //System.out.println("before: "+content);
+            content = processContent(content);
+            System.out.println("after: "+content);
+            if(content.matches("[^\\}\\{]*\\}\\}")){
+                content = content.substring(0,content.indexOf("}}"));
+            }
+            if(!isValidContent(content)){
+                this.buffer.append(content);
+                this.keep = true;
+                this.propStore = prop;
+                //throw new IOException();
+                return;
+            }
+        }
+        
+        Scanner sc = new Scanner(content);
+        sc.useDelimiter(" *<br(.){0,2}> *|( ){2,}|;");
+        List<String> temp = new ArrayList<String>();
+        while(sc.hasNext()){
+            String piece = sc.next();
+            while(!isValidContent(piece)){
+                piece = piece.concat(sc.next());
+            }
+            temp.add(piece);
+            //System.out.println("temp: "+piece);
+        }
+        String[] props = new String[temp.size()];
+        temp.toArray(props);
+        //String[] props = content.split(" *<br(.){0,2}> *|( ){2,}|;");
+        int left;
+        int right;
+        for(String p : props){
+            System.out.println("piece: " +p);
+            if(p.contains("{{") && p.contains("}}")){
+                p = analyzeCurlyBraces(p);
+            }
+            checkAndWrite(source, type, prop, p.trim());
+        }
+    }
+    private void processSettlement(String prop, String content, Info info){
+        //System.out.println("prop: "+prop);
+        if(prop.contains("subdivision_type")){
+            this._dependentRelation.put(prop, content);
+            info.prop = null;
+        }
+        if(prop.contains("subdivision_name")){
+            if(prop.equals("subdivision_name")){
+                //if(this._dependentRelation.containsKey("subdivision_type"))
+                    prop = this._dependentRelation.get("subdivision_type");
+            }else{
+                String key = "subdivision_type" + prop.charAt(16);
+                //if(this._dependentRelation.containsKey(key))
+                    prop = this._dependentRelation.get(key);
+            }
+            info.prop = prop;
+            info.content = content;
+            info.reverseType = prop;
+        }
+        
+        if(prop.contains("established_title")){
+            this._dependentRelation.put(prop, content);
+            info.prop = null;
+        }
+        if(prop.contains("established_date")){
+            if(prop.equals("established_date")){
+                prop = this._dependentRelation.get("established_title");
+            }else{
+                String key = "established_title" + prop.charAt(16);
+                prop = this._dependentRelation.get(key);
+            }
+            info.prop = prop;
+            info.content = content;
+            info.reverseType = prop;
+        }
+        
+        if(prop.matches("demographics[1-9]_title[1-9]")){
+            this._dependentRelation.put(prop, "demographics_"+content);
+            info.prop = null;
+        }
+        if(prop.matches("demographics[1-9]_info[1-9]")){
+            char num1 = prop.charAt(12);
+            char num2 = prop.charAt(18);
+            String key = "demographics" + num1 + "_title" + num2;
+            if(this._dependentRelation.containsKey(key)){
+                prop = this._dependentRelation.get(key);
+                info.prop = prop;
+                info.content = content;
+                info.reverseType = prop;
+            }
+        }
+        return;
+    }
+    private void processCountry(String prop, String content, Info info){
+        if(prop.contains("leader_title")){
+            this._dependentRelation.put(prop, content);
+            info.prop = null;
+        }
+        if(prop.contains("leader_name")){
+            char num = prop.charAt(11);
+            String key = "leader_title" + num;
+            prop = this._dependentRelation.get(key);
+            info.prop = prop;
+            info.content = content;
+            info.reverseType = prop;
+        }
+        if(prop.contains("established_event")){
+            this._dependentRelation.put(prop, content);
+            info.prop = null;
+        }
+        if(prop.contains("established_date")){
+            String num = prop.substring(16);
+            String key = "established_event" + num;
+            prop = this._dependentRelation.get(key);
+            info.prop = prop;
+            info.content = content;
+            info.reverseType = prop;
+        }
+        return;
+    }
+    
+    public void unitProcess(Info info){
+        if(info.prop.contains("_sq_mi")){
+            info.prop = info.prop.substring(0,info.prop.indexOf("_sq_mi"));
+            info.content = info.content.concat(" square mile");
+            info.reverseType = info.prop;
+        }else if(info.prop.contains("_km2")){
+            info.prop = info.prop.substring(0,info.prop.indexOf("_km2"));
+            info.content = info.content.concat(" square kilometer");
+            info.reverseType = info.prop;
+        }else if(info.prop.contains("_acre")){
+            info.prop = info.prop.substring(0,info.prop.indexOf("_acre"));
+            info.content = info.content.concat(" acre");
+            info.reverseType = info.prop;
+        }else if(info.prop.contains("_km")){
+            info.prop = info.prop.substring(0,info.prop.indexOf("_km"));
+            info.content = info.content.concat(" kilometer(s)");
+            info.reverseType = info.prop;
+        }else if(info.prop.contains("_mi")){
+            info.prop = info.prop.substring(0,info.prop.indexOf("_mi"));
+            info.content = info.content.concat(" miles");
+            info.reverseType = info.prop;
+        }else if(info.prop.contains("_ft")){
+            info.prop = info.prop.substring(0,info.prop.indexOf("_ft"));
+            info.content = info.content.concat(" feet");
+            info.reverseType = info.prop;
+        }else if(info.prop.contains("_m")){
+            info.prop = info.prop.substring(0,info.prop.indexOf("_m"));
+            info.content = info.content.concat(" meter(s)");
+            info.reverseType = info.prop;
+        }else if(info.prop.contains("_sqmi")){
+            info.prop = info.prop.substring(0,info.prop.indexOf("_sqmi"));
+            info.content = info.content.concat(" square miles");
+            info.reverseType = info.prop;
+        }
+    }
+    class Info{
+        String prop;
+        String content;
+        String reverseType;
+        String reverseProp;
+    }
+    public void checkAndWrite(String source, String type, String prop, String content) throws IOException{
+        System.out.println("content: "+content);
+        if(this._translator.containsKey(prop))
+            prop = this._translator.get(prop);
+        
+        //default values
+        Info info = new Info();
+        info.prop = prop;
+        info.content = content;
+        info.reverseProp = type;
+        info.reverseType = prop;
+        
+        //special treatment
+        if(type.equals("settlement"))
+            processSettlement(prop,content,info);
+        if(type.equals("country"))
+            processCountry(prop,content,info);
+        
+        List<String> reverseEntity = new ArrayList<String>();
+        if(content.contains("[[") && content.contains("]]")){
+            reverseEntity = this.processSquareBrackets(content, prop, type, source);
+        }
+            
+        if(info.prop!=null){
+            if(info.prop.matches(".*(_sq_mi|_km2|_acre|_km|_mi|_ft|_m|_sqmi)"))
+                unitProcess(info);
+            this.write(source, type, info.prop, info.content, source);
+            //System.out.println(reverseEntity.size());
+            for(String entity : reverseEntity){
+                this.write(entity, info.reverseType, info.reverseProp, source, source);
+            }
+        }
+    }
+    
+    public List<String> processSquareBrackets(String target, String prop, String type, String article) throws IOException{
+        System.out.println(target);
+        int left = target.indexOf("[")+2;
+        int right = target.indexOf("]");
+        List<String> result = new ArrayList<String>();
+        String entityName;
+        while(left!=-1 && right!=-1){
+            //System.out.println(target);
+            //System.out.println(left);
+            //System.out.println(right);
+            entityName = target.substring(left,right);
+            if(entityName.contains("|"))
+                entityName = entityName.substring(0,entityName.indexOf("|"));
+            result.add(entityName);
+            //this.write(entityName, prop, type, article, article);
+            left = target.indexOf("[",left+2)+2;
+            right = target.indexOf("]",right+2);
+        }
+        return result;
+    }
+    public String analyzeCurlyBraces(String phrase){
+        
+        Stack<Integer> stack = new Stack<Integer>();
+        if(phrase.contains("{{") && phrase.contains("}}")){
+            int left = phrase.indexOf("{{");
+            int right = phrase.indexOf("}}")+2;
+            int temp;
+            String cu,re;
+            while(left!=-1 || right!=-1){
+                //System.out.println("left:"+left);
+                //System.out.println("right:"+right);
+                if(left!=-1 && left<right){
+                    stack.push(left);
+                    left = phrase.indexOf("{{", left+2);
+                }else{
+                    if(stack.isEmpty())
+                        break;
+                    temp = stack.pop();
+                    cu = phrase.substring(temp,right);
+                    //System.out.println("cu: "+cu);
+                    //System.out.println("go: "+phrase.substring(temp+2,right-2));
+                    re = processCurlyBraces(phrase.substring(temp+2,right-2));
+                    //System.out.println("re: "+re);
+                    phrase = phrase.replace(cu, re);
+                    //System.out.println("phrase: "+ phrase);
+                    return analyzeCurlyBraces(phrase);
+                }
+            }
+        }
+        return phrase;
+    }
+    public String processCurlyBraces(String phrase){
+        Scanner sc = new Scanner(phrase);
+        sc.useDelimiter("\\|");
+        List<String> temp = new ArrayList<String>();
+        while(sc.hasNext()){
+            String str = sc.next();
+            while(!isValidContent(str)){
+                str = str.concat(sc.next());
+            }
+            temp.add(str);
+        }
+        
+        String[] token = new String[temp.size()];
+        temp.toArray(token);
+        
         int start = -1;
         int count = 0;
-        StringBuilder sb = new StringBuilder();
-        //System.out.println(word.substring(word.indexOf('{')+2,word.lastIndexOf("}")-1));
-        String[] token = word.split("\\|");
-        if(token.length<=1)
-            return null;
-        //System.out.println("token: "+token[0]);
-        if(token[0].contains("death date")){
+        if(token.length<=1){
+            start=0;count=1;
+        }else if(token[0].toLowerCase().contains("date")){
             start=1;count=3;
-        }else if(token[0].contains("date")){
-            start=1;count=3;
-        }else if(token[0].contains("Sfn")){
-            return null;
-        }else if(token[0].contains("convert")){
+        }else if(token[0].toLowerCase().contains("sfn")){
+            count=0;
+        }else if(token[0].toLowerCase().contains("convert")){
             start=1;count=2;
-        }else if(token[0].contains("coord")){
-            start=1;count=2;
-        }else if(token[0].contains("bar")){
-            return null;
+        }else if(token[0].toLowerCase().contains("coord")){
+            start=1;count=6;
+        }else if(token[0].toLowerCase().contains("bar")){
+            count=0;
         }else{
             start=1;count=token.length-1;
         }
-        for(int i=start;count>0;i++){
+        
+        StringBuilder sb = new StringBuilder();
+        for(int i=start;i<token.length && count>0;i++){
             if(token[i].contains("="))
                 continue;
-            if(token[i].contains("{{"))
-                sb.append(processCurlyBraces(token[i])).append(" ");
-            else 
-                sb.append(token[i]).append(" ");
+            sb.append(token[i]).append(" ");
             count--;
         }
-        //System.out.println(sb.toString());
         return sb.toString();
+
     }
     
     public static void main(String[] args) throws Exception{
-        String[] props = "[[Richard Shelby]] (R)<br />[[Jeff Sessions]] (R)".split(" *<br(.)*> *|( ){2,}");
-        for(String s : props)
-            System.out.println(":"+s);
-        String line = "}}{{Infobox aircraft type";
-        line = line.substring(line.lastIndexOf("{")+9);
-        System.out.println(line);
-        InfoboxExtractor2 extractor = new InfoboxExtractor2();
-        extractor.start("data/relations/tin_entity_prop_out.txt", "data/tinTestList");
+        InfoboxExtractor2 e = new InfoboxExtractor2();
+        String test = "<div style=\"padding-bottom:0.5em;text-align:center;\">\"[[In God We Trust]]\" {{small|(official)}}<ref>{{USC|36|302}} ''National motto''</ref><ref>[[#Simonson|Simonson, 2010]]</ref><ref>[[#God|Dept. of Treasury, 2011]]</ref></div>";
+        //String test = "Incorporated<br/>&nbsp;- Town";
+        System.out.println(e.processContent(test).replace("<[^>]*>", ""));
+        //System.out.println(test.replaceAll("<[^>]*>", ""));
+        
+        //String test = "{{nowrap|[[.us]]{{nbsp|3}}[[.gov]]{{nbsp|3}}[[.mil]]{{nbsp|3}}[[.edu]]}}";
+        //System.out.println(test.replace("{{nbsp|3}}", "3"));
+        
+        String p = "{{nowrap|[[.us]]{{nbsp|3}}[[.gov]]{{nbsp|3}}[[.mil]]{{nbsp|3}}[[.edu]]}}";
+        System.out.println(e.processCurlyBraces(p));
+        
+        String test2 = "[[New York City]]<br />{{small|{{coord|40|43|N|74|00|W|display=inline}}}}";
+        System.out.println(e.isValidContent(test2));
+        
+        e.setTranslator("data/tinTranslate");
+        //e.start("data/relations/tin_entity_prop_out.txt", "data/ListOfArticlesWithTables");
+        e.start("data/relations/tin_entity_prop_out.txt", "data/tinTestList");
+        
+        /*
+        String source = "Hirohito";
+        String content = WikiInfoboxReader.getByArticleName(source);
+        System.out.println(content);
+        e.processInfobox(source, content);
+        */
+        
+        
     }
 }

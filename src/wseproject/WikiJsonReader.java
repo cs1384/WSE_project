@@ -7,17 +7,12 @@ package wseproject;
 
 import java.net.*;
 import java.io.*;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.Iterator;
-import org.json.JSONArray;
+import java.util.Scanner;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -33,7 +28,7 @@ public class WikiJsonReader
             String input;
             StringBuilder sb = new StringBuilder();
             while((input = br.readLine()) != null){
-                System.out.println(input);
+                //System.out.println(input);
                 sb.append(input);
             }
             
@@ -63,10 +58,12 @@ public class WikiJsonReader
         {
             JSONObject json = readJsonFromUrl(srcURL);
             JSONObject pages = json.getJSONObject("query").getJSONObject("pages");
+            //JSONObject pages = json.get
             Iterator i = pages.keys();
             while (i.hasNext())
             {
                 String key = (String) i.next();
+                System.out.println(key);
                 JSONObject page = pages.getJSONObject(key);
                 JSONObject rev0 = page.getJSONArray("revisions").getJSONObject(0);
                 String text = rev0.getString("*");
@@ -86,7 +83,13 @@ public class WikiJsonReader
     
     public static void main(String[] args){
         WikiJsonReader test = new WikiJsonReader();
-        test.getWikiText("Alabama");
+        String s = test.getWikiText("United States");
+        Scanner sc = new Scanner(s);
+        int i = 0;
+        while(i<100){
+            System.out.println(sc.nextLine());
+            i++;
+        }
         //System.out.println(test.getWikiText("Alabama"));
     }
     
