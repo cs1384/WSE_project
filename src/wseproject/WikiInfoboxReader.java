@@ -55,6 +55,39 @@ public class WikiInfoboxReader {
         }
         return sb.toString();
     }
+    public static String extractInfobox(String content){
+        Scanner sc = new Scanner(content);
+        StringBuilder sb = new StringBuilder();
+        boolean print = false;
+        int curlyCount = 0;
+        while(sc.hasNextLine()){
+            String line = sc.nextLine();
+            //System.out.println(line);
+            if(!print && line.matches(".*\\{\\{[^ ]*box.*")){
+                line = line.substring(line.indexOf("{"));
+                print = true;
+                curlyCount++;
+                sb.append(line).append("\n");
+                //System.out.println(line);
+                //System.out.println(curlyCount);
+            }else if(print && line.matches("\\{\\{.*")){
+                curlyCount++;
+                sb.append(line).append("\n");
+                //System.out.println(line);
+                //System.out.println(curlyCount);
+            }else if(print && line.matches("}}")){
+                curlyCount--;
+                sb.append(line).append("\n");
+                //System.out.println(line);
+                //System.out.println(curlyCount);
+                if(curlyCount==0)
+                    break;
+            }
+            if(print && line.matches("( )*\\|.*|( ){1,}\\{\\{.*"))
+                sb.append(line).append("\n");
+        }
+        return sb.toString();
+    }
     
     public static void main(String[] args){
         try {

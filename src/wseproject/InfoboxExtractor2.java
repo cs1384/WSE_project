@@ -52,7 +52,7 @@ public class InfoboxExtractor2 {
         }
         bw.close();
     }
-    public void start(String outputPath, String articleListPath) throws IOException{
+    public void startBatch(String outputPath, String articleListPath) throws IOException{
         File outputFile = new File(outputPath);
         outputFile.delete();
         this._bw = new BufferedWriter(new FileWriter(outputFile,true));
@@ -74,6 +74,20 @@ public class InfoboxExtractor2 {
         this.output();
         System.out.println("DONE "+count);
     }    
+    public void startAFile(String outputPath, String articleName, String content) throws IOException{
+        File outputFile = new File(outputPath);
+        outputFile.delete();
+        this._bw = new BufferedWriter(new FileWriter(outputFile,true));
+        String infobox = WikiInfoboxReader.extractInfobox(content);
+        if(infobox.length()==0){
+            System.out.println("no infobox extracted");
+            return;
+        }
+        System.out.println(articleName);
+        System.out.println(infobox);
+        processInfobox(articleName, infobox);
+        this._bw.close();
+    }
     public void processInfobox(String source, String box) throws IOException{
         Scanner sc = new Scanner(box);
         this.keep = false;
