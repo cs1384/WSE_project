@@ -75,38 +75,37 @@ public class InfoboxExtractor2 {
         this.output();
         System.out.println("DONE "+count);
     }    
-    public void startAFile(BufferedWriter bwNew, String articleName, String content) throws IOException{
+    public String startAFile(BufferedWriter bwNew, String articleName, String content) throws IOException{
         //File outputFile = new File(outputPath);
         //outputFile.delete();
         //this._bw = new BufferedWriter(new FileWriter(outputFile,true));
 		this._bw = bwNew;
         String infobox = WikiInfoboxReader.extractInfobox(content);
         if(infobox.length()==0){
-            System.out.println("no infobox extracted");
-            return;
+            return "!!! no infobox extracted";
         }
         System.out.println(articleName);
         System.out.println(infobox);
-        processInfobox(articleName, infobox);
+        return processInfobox(articleName, infobox);
         //this._bw.close();
     }
 	
-	public void startAFile(String outputPath, String articleName, String content) throws IOException{
+	public String startAFile(String outputPath, String articleName, String content) throws IOException{
         File outputFile = new File(outputPath);
         outputFile.delete();
         this._bw = new BufferedWriter(new FileWriter(outputFile,true));
         String infobox = WikiInfoboxReader.extractInfobox(content);
         if(infobox.length()==0){
-            System.out.println("no infobox extracted");
-            return;
+            return "!!! no infobox extracted";
         }
         System.out.println(articleName);
         System.out.println(infobox);
-        processInfobox(articleName, infobox);
+        String type = processInfobox(articleName, infobox);
         this._bw.close();
+        return type;
     }
     
-    public void processInfobox(String source, String box) throws IOException{
+    public String processInfobox(String source, String box) throws IOException{
         Scanner sc = new Scanner(box);
         this.keep = false;
         /* get inbox type */
@@ -122,7 +121,7 @@ public class InfoboxExtractor2 {
             //System.out.println(line);
             processLine(source, type, line);
         }
-        return;
+        return type;
     }
     public void write(String entity, String type, String property, 
             String content, String source){
