@@ -91,15 +91,17 @@ public class WikiInfoboxReader {
     
     public static void main(String[] args){
         try {
+            /*
             System.out.println(WikiInfoboxReader.getByArticleName("Brad Pitt"));
             System.out.println(WikiInfoboxReader.getByArticleName("Amazon River"));
             System.out.println(WikiInfoboxReader.getByArticleName("Shanghai"));
-            System.out.println(WikiInfoboxReader.getByArticleName("United States"));
             System.out.println(WikiInfoboxReader.getByArticleName("Barack Obama"));
             System.out.println(WikiInfoboxReader.getByArticleName("Mount Shasta"));
             System.out.println(WikiInfoboxReader.getByArticleName("English"));
             System.out.println(WikiInfoboxReader.getByArticleName("Law Courts of Brussels"));
             System.out.println(WikiInfoboxReader.getByArticleName("Alabama"));
+            */
+            System.out.println(WikiInfoboxReader.getByArticleName("United States"));
             String s = WikiInfoboxReader.getByArticleName("Tianjin Grand Bridge");
             System.out.println("============");
             System.out.println(s);

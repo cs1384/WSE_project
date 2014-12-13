@@ -32,6 +32,7 @@ public class InfoboxExtractor2 {
     String dataPath = "data/";
     
     boolean keep = false;
+    boolean notdone = false;
     String propStore;
     StringBuilder buffer = new StringBuilder();
     
@@ -74,7 +75,23 @@ public class InfoboxExtractor2 {
         this.output();
         System.out.println("DONE "+count);
     }    
-    public void startAFile(String outputPath, String articleName, String content) throws IOException{
+    public void startAFile(BufferedWriter bwNew, String articleName, String content) throws IOException{
+        //File outputFile = new File(outputPath);
+        //outputFile.delete();
+        //this._bw = new BufferedWriter(new FileWriter(outputFile,true));
+		this._bw = bwNew;
+        String infobox = WikiInfoboxReader.extractInfobox(content);
+        if(infobox.length()==0){
+            System.out.println("no infobox extracted");
+            return;
+        }
+        System.out.println(articleName);
+        System.out.println(infobox);
+        processInfobox(articleName, infobox);
+        //this._bw.close();
+    }
+	
+	public void startAFile(String outputPath, String articleName, String content) throws IOException{
         File outputFile = new File(outputPath);
         outputFile.delete();
         this._bw = new BufferedWriter(new FileWriter(outputFile,true));
@@ -88,6 +105,7 @@ public class InfoboxExtractor2 {
         processInfobox(articleName, infobox);
         this._bw.close();
     }
+    
     public void processInfobox(String source, String box) throws IOException{
         Scanner sc = new Scanner(box);
         this.keep = false;
@@ -148,7 +166,7 @@ public class InfoboxExtractor2 {
                 replaceAll("&#.*;"," ");
         return result;
     }
-    public boolean isValidContent(String content){
+    public int isValidContent(String content){
         //System.out.println("content: "+content);
         Stack<Integer> op = new Stack<Integer>();
         int left, right;
@@ -163,13 +181,13 @@ public class InfoboxExtractor2 {
                     right = content.lastIndexOf("}}", right-2);
                 }else{
                     if(op.isEmpty())
-                        return false;
+                        return 0;
                     op.pop();
                     left = content.lastIndexOf("{{", left-2);
                 }
             }
             if(op.size()!=0)
-                return false;
+                return -1;
         }
         op.clear();
         if(content.contains("[[") || content.contains("]]")){
@@ -181,26 +199,34 @@ public class InfoboxExtractor2 {
                     right = content.lastIndexOf("]]", right-2);
                 }else{
                     if(op.isEmpty())
-                        return false;
+                        return 0;
                     op.pop();
                     left = content.lastIndexOf("[[", left-2);
                 }
             }
             if(op.size()!=0)
-                return false;
+                return -1;
         }
         //System.out.println("Valid!");
-        return true;
+        return 1;
     }
     public void processLine(String source, String type, String line) throws IOException{
         System.out.println("line: "+line);
         String prop = null;
         String content = null;
+        if(this.notdone){
+            if(!line.contains("=")){
+                this.keep = true;
+            }
+            this.notdone = false;
+        }
         //System.out.println(keep);
         if(this.keep){
             this.buffer.append(line);
-            if(!isValidContent(this.buffer.toString())) return;
+            if(isValidContent(this.buffer.toString())<1) return;
             content = this.buffer.toString();
+            this.buffer.setLength(0);
+            this.buffer.trimToSize();
             prop = this.propStore;
             this.keep = false;
         }else{
@@ -209,25 +235,30 @@ public class InfoboxExtractor2 {
             //System.out.println("test1");
             prop = line.substring(0, line.indexOf("=")).trim();
             content = line.substring(line.indexOf("=")+1).trim();
-            //no value for this property
-            if(content.equals(""))
-                return;
             //System.out.println("test2");
             prop = prop.replaceAll("\\|", "").trim().toLowerCase();
             System.out.println("prop: "+prop);
             if(!validProperty(prop)) return;
-            
+            if(content.equals("")){
+                this.propStore = prop;
+                this.notdone = true;
+                return;
+            }
             //System.out.println("before: "+content);
             content = processContent(content);
             System.out.println("after: "+content);
             if(content.matches("[^\\}\\{]*\\}\\}")){
                 content = content.substring(0,content.indexOf("}}"));
             }
-            if(!isValidContent(content)){
+            int test = isValidContent(content);
+            //System.out.println("test: "+test);
+            if(test==0){
                 this.buffer.append(content);
                 this.keep = true;
                 this.propStore = prop;
                 //throw new IOException();
+                return;
+            }else if(test==-1){
                 return;
             }
         }
@@ -237,7 +268,7 @@ public class InfoboxExtractor2 {
         List<String> temp = new ArrayList<String>();
         while(sc.hasNext()){
             String piece = sc.next();
-            while(!isValidContent(piece)){
+            while(isValidContent(piece)<1){
                 piece = piece.concat(sc.next());
             }
             temp.add(piece);
@@ -249,7 +280,7 @@ public class InfoboxExtractor2 {
         int left;
         int right;
         for(String p : props){
-            System.out.println("piece: " +p);
+            //System.out.println("piece: " +p);
             if(p.contains("{{") && p.contains("}}")){
                 p = analyzeCurlyBraces(p);
             }
@@ -469,7 +500,7 @@ public class InfoboxExtractor2 {
         List<String> temp = new ArrayList<String>();
         while(sc.hasNext()){
             String str = sc.next();
-            while(!isValidContent(str)){
+            while(isValidContent(str)<1){
                 str = str.concat(sc.next());
             }
             temp.add(str);
@@ -523,16 +554,15 @@ public class InfoboxExtractor2 {
         String test2 = "[[New York City]]<br />{{small|{{coord|40|43|N|74|00|W|display=inline}}}}";
         System.out.println(e.isValidContent(test2));
         
+        /*
         e.setTranslator("data/tinTranslate");
         //e.start("data/relations/tin_entity_prop_out.txt", "data/ListOfArticlesWithTables");
-        e.start("data/relations/tin_entity_prop_out.txt", "data/tinTestList");
-        
-        /*
-        String source = "Hirohito";
+        e.startBatch("data/relations/tin_entity_prop_out.txt", "data/tinTestList");
+        */
+        String source = "United States";
         String content = WikiInfoboxReader.getByArticleName(source);
         System.out.println(content);
         e.processInfobox(source, content);
-        */
         
         
     }
