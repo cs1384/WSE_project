@@ -98,8 +98,8 @@ public class InfoboxExtractor2 {
         if(infobox.length()==0){
             return "!!! no infobox extracted";
         }
-        System.out.println(articleName);
-        System.out.println(infobox);
+        //System.out.println(articleName);
+        //System.out.println(infobox);
         String type = processInfobox(articleName, infobox);
         this._bw.close();
         return type;
@@ -114,7 +114,7 @@ public class InfoboxExtractor2 {
         int index = line.indexOf("box")+3;
         String type = line.substring(index).trim().toLowerCase();
         boxType.add(type);
-        System.out.println("type: "+type);
+        //System.out.println("type: "+type);
         /* process rest lines */
         while(sc.hasNextLine()){
             line = sc.nextLine();
@@ -135,10 +135,10 @@ public class InfoboxExtractor2 {
         sb.append(source).append("\n");
         try {
             this._bw.write(sb.toString());
-            System.out.print(": " + sb.toString());
+            //System.out.print(": " + sb.toString());
         } catch (NullPointerException e){
             //this._bw is not initialized
-            System.out.print(": " + sb.toString());
+            //System.out.print(": " + sb.toString());
         } catch (IOException e) {
             e.printStackTrace();
         }
